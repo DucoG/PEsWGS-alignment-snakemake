@@ -3,8 +3,6 @@ import os
 from pathlib import Path
 from datetime import datetime
 
-
-
 configfile: "config_snake.yaml"
 
 def generate_output_files(raw_folder):
