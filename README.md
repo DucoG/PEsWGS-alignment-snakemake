@@ -41,7 +41,28 @@ To run the entire pipeline, use the following command:
 ```bash
 snakemake --use-conda -j <NUMBER_OF_JOBS>
 ```
-This will generate marked BAM files and QC reports for the data in `data/raw`.
+This will generate marked BAM files and QC reports for the data in `data/raw`. Your directory will look as follows:
+```bash
+.
+├── data                        <- contains all input and output files for the pipeline
+│   ├── aligned
+│   ├── marked
+│   ├── raw
+├── logs                        <- contains log files for each step of the pipeline
+
+│   ├── index_bam
+│   └── mark_duplicates
+└── qc_outputs                  <- contains output files from quality control steps
+    ├── marked
+    │   ├── fastqc_output
+    │   └── multiqc_output
+    │       └── multiqc_data
+    └── raw
+        ├── fastqc_output
+        └── multiqc_output
+            └── multiqc_data
+```
+
 
 To run a specific rule, for example, to run only the `fastq2bam` rule, use the following command:
 
