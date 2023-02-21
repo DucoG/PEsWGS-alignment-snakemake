@@ -49,7 +49,6 @@ This will generate marked BAM files and QC reports for the data in `data/raw`. Y
 │   ├── marked
 │   ├── raw
 ├── logs                        <- contains log files for each step of the pipeline
-
 │   ├── index_bam
 │   └── mark_duplicates
 └── qc_outputs                  <- contains output files from quality control steps
