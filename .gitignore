@@ -1,0 +1,4 @@
+.snakemake/*
+data/*
+qc_outputs/*
+logs/*
