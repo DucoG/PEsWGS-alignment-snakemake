@@ -1,3 +1,1 @@
-reference_genome: "/home/d.gaillard/source/reference_genomes/GRC38.p14/ncbi_dataset/data/GCF_000001405.40/GCF_000001405.40_GRCh38.p14_genomic.fna"
-reference_name: 'hg38'
 wgs_env: 'wgs'
