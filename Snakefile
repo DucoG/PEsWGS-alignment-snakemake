@@ -5,18 +5,23 @@ from datetime import datetime
 
 configfile: "config_snake.yaml"
 
-def generate_output_files(raw_folder):
-    refname = config['reference_name']
-    out_folder = raw_folder.replace('raw', f'marked_{refname}')
-    output_files = []
-    for file in os.listdir(raw_folder):
-        if file.endswith("R1.fastq.gz"):
-            output_files.append(
-                os.path.join(out_folder,file.replace('_R1.fastq.gz', f'_{refname}_mrk.bam.bai')))
-    return output_files
+hg_path_dict = {
+    "hg19": "/home/d.gaillard/source/reference_genomes/hg19/hg19.fa",
+    "hg38noalt": "/home/d.gaillard/source/reference_genomes/hg38_no_alt/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna",
+    "hg38full": "/home/d.gaillard/source/reference_genomes/hg38_full/hg38.fa"
+}
 
-def generate_qc_outputs(step):
-    refname = config['reference_name']
+# def generate_output_files(raw_folder):
+#     refname = config['reference_name']
+#     out_folder = raw_folder.replace('raw', f'marked_{refname}')
+#     output_files = []
+#     for file in os.listdir(raw_folder):
+#         if file.endswith("R1.fastq.gz"):
+#             output_files.append(
+#                 os.path.join(out_folder,file.replace('_R1.fastq.gz', f'_{refname}_mrk.bam.bai')))
+#     return output_files
+
+def generate_qc_outputs(step, refname):
     data_dir = Path("data")
     raw_files = list(data_dir.joinpath("raw").glob("*.fastq.gz"))
     qc_dir = Path("qc_outputs")
@@ -49,22 +54,30 @@ def get_ext(step_folder):
     }
     return ext_map.get(step_folder)
 
+def get_index_ext(step_folder):
+    ext_map = {
+        'raw': '.fastq.gz',
+        'aligned': '.bam.bai',
+        'marked': '.bam.bai'
+    }
+    return ext_map.get(step_folder)
+
 def get_timestamp_string():
 	return datetime.fromtimestamp(datetime.timestamp(datetime.now())).strftime("%y-%m-%d-%H:%M")
 
 
 rule all:
     input:
-        generate_output_files('data/raw'),
+        # generate_output_files('data/raw'),
         "qc_outputs/raw/multiqc_output/multiqc_report.html",
-        f"qc_outputs/marked_{config['reference_name']}/multiqc_output/multiqc_report.html"
+        "qc_outputs/marked_hg19/multiqc_output/multiqc_report.html",
+        "qc_outputs/marked_hg38noalt/multiqc_output/multiqc_report.html"
 
 rule fastq2bam:
-    params:
-        refname = config['reference_genome']
     input: 
         fastq1 = 'data/raw/{id}_R1.fastq.gz',
-        fastq2 = 'data/raw/{id}_R2.fastq.gz'
+        fastq2 = 'data/raw/{id}_R2.fastq.gz',
+        ref_path = lambda wildcards: hg_path_dict[wildcards.refname]
     output: 
         bam = 'data/aligned_{refname}/{id}_{refname}.bam'
     threads: 4
@@ -74,7 +87,7 @@ rule fastq2bam:
         "logs/fastq2bam/{id}_{refname}.log"
     shell: 
         """
-        (bwa mem -t {threads} {params.refname} {input.fastq1} {input.fastq2} | samtools sort > {output.bam}) 2> {log}
+        (bwa mem -t {threads} {input.ref_path} {input.fastq1} {input.fastq2} | samtools sort > {output.bam}) 2> {log}
         """
 
 rule index_bam:
@@ -110,10 +123,9 @@ rule mark_duplicates:
 
 # rule fastqc
 rule fastqc:
-    params:
-        refname = config['reference_name']
     input:
-        file = lambda wildcards: f'data/{wildcards.step_folder}_{wildcards.refname}/{wildcards.id}' + get_ext(wildcards.step_folder)
+        file = lambda wildcards: f'data/{wildcards.step_folder}_{wildcards.refname}/{wildcards.id}' + get_ext(wildcards.step_folder),
+        index_file = lambda wildcards: f'data/{wildcards.step_folder}_{wildcards.refname}/{wildcards.id}' + get_index_ext(wildcards.step_folder)
     output:
         fastqc_report = 'qc_outputs/{step_folder}_{refname}/fastqc_output/{id}_fastqc.html'
     conda:
@@ -125,8 +137,7 @@ rule fastqc:
 
 rule multiqc:
     input:
-        infiles = lambda wildcards: generate_qc_outputs(wildcards.step_folder),
-        refname = config['reference_genome']
+        infiles = lambda wildcards: generate_qc_outputs(wildcards.step_folder, wildcards.refname)
     output:
         multiqc_report = "qc_outputs/{step_folder}_{refname}/multiqc_output/multiqc_report.html"
     conda:
