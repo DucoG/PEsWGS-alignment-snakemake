@@ -81,6 +81,8 @@ rule fastq2bam:
     output: 
         bam = 'data/aligned_{refname}/{id}_{refname}.bam'
     threads: 4
+    resources:
+        mem_mb=10000
     conda:
         config['wgs_env']
     log:
@@ -99,6 +101,7 @@ rule index_bam:
         config['wgs_env']
     log:
         "logs/index_bam/{step_folder}_{sample}.log"
+    threads: 1
     shell:
         """
         (samtools index {input.bam}) 2> {log}
@@ -115,6 +118,9 @@ rule mark_duplicates:
         config['wgs_env']
     log:
         "logs/mark_duplicates/{id}_{refname}.log"
+    threads: 1
+    resources:
+        mem_mb=1024
     shell:
         """
         (picard MarkDuplicates INPUT={input.in_bam} OUTPUT={output.out_bam} M={output.metrics_file}) 2> {log}
@@ -130,6 +136,9 @@ rule fastqc:
         fastqc_report = 'qc_outputs/{step_folder}_{refname}/fastqc_output/{id}_fastqc.html'
     conda:
         config['wgs_env']
+    threads: 1
+    resources:
+        mem_mb=1024
     shell:
         """
         fastqc -o qc_outputs/{wildcards.step_folder}_{wildcards.refname}/fastqc_output {input.file}
