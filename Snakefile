@@ -132,7 +132,7 @@ rule fastqc:
         config['wgs_env']
     shell:
         """
-        fastqc -o qc_outputs/{wildcards.step_folder}/fastqc_output {input.file}
+        fastqc -o qc_outputs/{wildcards.step_folder}_{wildcards.refname}/fastqc_output {input.file}
         """
 
 rule multiqc:
