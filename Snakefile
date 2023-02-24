@@ -11,16 +11,6 @@ hg_path_dict = {
     "hg38full": "/home/d.gaillard/source/reference_genomes/hg38_full/hg38.fa"
 }
 
-# def generate_output_files(raw_folder):
-#     refname = config['reference_name']
-#     out_folder = raw_folder.replace('raw', f'marked_{refname}')
-#     output_files = []
-#     for file in os.listdir(raw_folder):
-#         if file.endswith("R1.fastq.gz"):
-#             output_files.append(
-#                 os.path.join(out_folder,file.replace('_R1.fastq.gz', f'_{refname}_mrk.bam.bai')))
-#     return output_files
-
 def generate_qc_outputs(step, refname):
     data_dir = Path("data")
     raw_files = list(data_dir.joinpath("raw").glob("*.fastq.gz"))
@@ -71,78 +61,87 @@ rule all:
         # generate_output_files('data/raw'),
         "qc_outputs/raw/multiqc_output/multiqc_report.html",
         "qc_outputs/marked_hg19/multiqc_output/multiqc_report.html",
-        "qc_outputs/marked_hg38noalt/multiqc_output/multiqc_report.html"
+        # "qc_outputs/marked_hg38noalt/multiqc_output/multiqc_report.html"
 
-rule fastq2bam:
-    input: 
-        fastq1 = 'data/raw/{id}_R1.fastq.gz',
-        fastq2 = 'data/raw/{id}_R2.fastq.gz',
-        ref_path = lambda wildcards: hg_path_dict[wildcards.refname]
-    output: 
-        bam = 'data/aligned_{refname}/{id}_{refname}.bam'
-    threads: 4
-    resources:
-        mem_mb=10000
-    conda:
-        config['wgs_env']
+rule bwa_mem2_index:
+    input:
+        "{genome}",
+    output:
+        "{genome}.0123",
+        "{genome}.amb",
+        "{genome}.ann",
+        "{genome}.bwt.2bit.64",
+        "{genome}.pac",
     log:
-        "logs/fastq2bam/{id}_{refname}.log"
-    shell: 
-        """
-        (bwa mem -t {threads} {input.ref_path} {input.fastq1} {input.fastq2} | samtools sort > {output.bam}) 2> {log}
-        """
+        "logs/bwa-mem2_index/{genome}.log",
+    wrapper:
+        "v1.23.4/bio/bwa-mem2/index"
 
-rule index_bam:
+rule bwa_mem2_mem:
+    input:
+        reads=["data/raw/{id}_R1.fastq", "data/raw/{id}_R2.fastq"],
+        # Index can be a list of (all) files created by bwa, or one of them
+        idx=multiext(lambda wildcards: hg_path_dict[wildcards.refname], ".amb", ".ann", ".bwt.2bit.64", ".pac"),
+    output:
+        bam = 'data/aligned_{refname}/{id}_{refname}.bam',
+    log:
+        "logs/bwa_mem2/{id}_{refname}.log",
+    params:
+        extra="",
+        sort="samtools",  # Can be 'none', 'samtools' or 'picard'.
+        sort_order="coordinate",  # Can be 'coordinate' (default) or 'queryname'.
+        sort_extra="",  # Extra args for samtools/picard.
+    threads: 8
+    wrapper:
+        "v1.23.4/bio/bwa-mem2/mem"
+
+rule samtools_index:
     input:
         bam = 'data/{step_folder}/{sample}.bam'
     output:
         bai = 'data/{step_folder}/{sample}.bam.bai'
-    conda:
-        config['wgs_env']
     log:
-        "logs/index_bam/{step_folder}_{sample}.log"
-    threads: 1
-    shell:
-        """
-        (samtools index {input.bam}) 2> {log}
-        """
+        "logs/samtools_index/{step_folder}_{sample}.log",
+    params:
+        extra="",  # optional params string
+    threads: 2  # This value - 1 will be sent to -@
+    wrapper:
+        "v1.23.4/bio/samtools/index"
 
 rule mark_duplicates:
     input:
-        in_bam = 'data/aligned_{refname}/{id}_{refname}.bam',
-        in_bai = 'data/aligned_{refname}/{id}_{refname}.bam.bai'
+        bams='data/aligned_{refname}/{id}_{refname}.bam',
+    # optional to specify a list of BAMs; this has the same effect
+    # of marking duplicates on separate read groups for a sample
+    # and then merging
     output:
-        out_bam = 'data/marked_{refname}/{id}_{refname}_mrk.bam',
-        metrics_file = 'qc_outputs/marked_{refname}/{id}_{refname}_mrk_stats.txt'
-    conda:
-        config['wgs_env']
+        bam="data/marked_{refname}/{id}_{refname}.bam",
+        metrics="marked_{refname}/{id}_{refname}.metrics.txt",
     log:
-        "logs/mark_duplicates/{id}_{refname}.log"
-    threads: 1
+        "logs/picard/marked/{id}_{refname}.log",
+    params:
+        extra="--REMOVE_DUPLICATES false",
+    # optional specification of memory usage of the JVM that snakemake will respect with global
+    # resource restrictions (https://snakemake.readthedocs.io/en/latest/snakefiles/rules.html#resources)
+    # and which can be used to request RAM during cluster job submission as `{resources.mem_mb}`:
+    # https://snakemake.readthedocs.io/en/latest/executing/cluster.html#job-properties
     resources:
-        mem_mb=1024
-    shell:
-        """
-        (picard MarkDuplicates INPUT={input.in_bam} OUTPUT={output.out_bam} M={output.metrics_file}) 2> {log}
-        """
-
-
-# rule fastqc
+        mem_mb=1024,
+    wrapper:
+        "v1.23.4/bio/picard/markduplicates"
+        
 rule fastqc:
     input:
-        file = lambda wildcards: f'data/{wildcards.step_folder}_{wildcards.refname}/{wildcards.id}' + get_ext(wildcards.step_folder),
-        index_file = lambda wildcards: f'data/{wildcards.step_folder}_{wildcards.refname}/{wildcards.id}' + get_index_ext(wildcards.step_folder)
+        lambda wildcards: f'data/{wildcards.step_folder}_{wildcards.refname}/{wildcards.id}' + get_ext(wildcards.step_folder)
     output:
-        fastqc_report = 'qc_outputs/{step_folder}_{refname}/fastqc_output/{id}_fastqc.html'
-    conda:
-        config['wgs_env']
+        html='qc_outputs/{step_folder}_{refname}/fastqc_output/{id}_fastqc.html',
+        zip='qc_outputs/{step_folder}_{refname}/fastqc_output/{id}_fastqc.zip' # the suffix _fastqc.zip is necessary for multiqc to find the file. If not using multiqc, you are free to choose an arbitrary filename
+    params: "--quiet"
+    log:
+        "logs/fastqc_{step_folder}/{id}_{refname}.log"
     threads: 1
-    resources:
-        mem_mb=1024
-    shell:
-        """
-        fastqc -o qc_outputs/{wildcards.step_folder}_{wildcards.refname}/fastqc_output {input.file}
-        """
+    wrapper:
+        "v1.23.4/bio/fastqc"
 
 rule multiqc:
     input:
