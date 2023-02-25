@@ -11,16 +11,6 @@ hg_path_dict = {
     "hg38full": "/home/d.gaillard/source/reference_genomes/hg38_full/hg38.fa"
 }
 
-# def generate_output_files(raw_folder):
-#     refname = config['reference_name']
-#     out_folder = raw_folder.replace('raw', f'marked_{refname}')
-#     output_files = []
-#     for file in os.listdir(raw_folder):
-#         if file.endswith("R1.fastq.gz"):
-#             output_files.append(
-#                 os.path.join(out_folder,file.replace('_R1.fastq.gz', f'_{refname}_mrk.bam.bai')))
-#     return output_files
-
 def generate_qc_outputs(step, refname):
     data_dir = Path("data")
     raw_files = list(data_dir.joinpath("raw").glob("*.fastq.gz"))
@@ -71,7 +61,7 @@ rule all:
         # generate_output_files('data/raw'),
         "qc_outputs/raw/multiqc_output/multiqc_report.html",
         "qc_outputs/marked_hg19/multiqc_output/multiqc_report.html",
-        "qc_outputs/marked_hg38noalt/multiqc_output/multiqc_report.html"
+        # "qc_outputs/marked_hg38noalt/multiqc_output/multiqc_report.html"
 
 rule fastq2bam:
     input: 
@@ -101,7 +91,7 @@ rule index_bam:
         config['wgs_env']
     log:
         "logs/index_bam/{step_folder}_{sample}.log"
-    threads: 1
+    threads: 2
     shell:
         """
         (samtools index {input.bam}) 2> {log}
@@ -118,12 +108,12 @@ rule mark_duplicates:
         config['wgs_env']
     log:
         "logs/mark_duplicates/{id}_{refname}.log"
-    threads: 1
+    threads: 2
     resources:
         mem_mb=1024
     shell:
         """
-        (picard MarkDuplicates INPUT={input.in_bam} OUTPUT={output.out_bam} M={output.metrics_file}) 2> {log}
+        (picard MarkDuplicates -Xmx{resources.mem_mb}m INPUT={input.in_bam} OUTPUT={output.out_bam} M={output.metrics_file}) 2> {log}
         """
 
 
@@ -136,12 +126,12 @@ rule fastqc:
         fastqc_report = 'qc_outputs/{step_folder}_{refname}/fastqc_output/{id}_fastqc.html'
     conda:
         config['wgs_env']
-    threads: 1
+    threads: 2
     resources:
         mem_mb=1024
     shell:
         """
-        fastqc -o qc_outputs/{wildcards.step_folder}_{wildcards.refname}/fastqc_output {input.file}
+        fastqc -Xmx{resources.mem_mb}m -o qc_outputs/{wildcards.step_folder}_{wildcards.refname}/fastqc_output {input.file}
         """
 
 rule multiqc:
@@ -151,6 +141,7 @@ rule multiqc:
         multiqc_report = "qc_outputs/{step_folder}_{refname}/multiqc_output/multiqc_report.html"
     conda:
         config['wgs_env']
+    threads: 2
     shell:
         """
         multiqc --outdir qc_outputs/{wildcards.step_folder}_{wildcards.refname}/multiqc_output qc_outputs/{wildcards.step_folder}_{wildcards.refname}
