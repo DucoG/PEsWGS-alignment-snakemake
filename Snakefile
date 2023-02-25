@@ -11,6 +11,10 @@ hg_path_dict = {
     "hg38full": "/home/d.gaillard/source/reference_genomes/hg38_full/hg38.fa"
 }
 
+IDS, = glob_wildcards("data/raw/{id}.fastq.gz")
+IDS = ['_'.join(x.split('_')[:-1]) for x in IDS]
+print(IDS)
+
 def generate_qc_outputs(step, refname):
     data_dir = Path("data")
     raw_files = list(data_dir.joinpath("raw").glob("*.fastq.gz"))
@@ -73,15 +77,17 @@ rule bwa_mem2_index:
         "{genome}.bwt.2bit.64",
         "{genome}.pac",
     log:
-        "logs/bwa-mem2_index/{genome}.log",
+        "logs/bwa-mem2_index{genome}.log",
     wrapper:
         "v1.23.4/bio/bwa-mem2/index"
 
+ref_path_list = lambda refname: [hg_path_dict[refname], f"{hg_path_dict[refname]}.bwt.2bit.64"]
 rule bwa_mem2_mem:
     input:
-        reads=["data/raw/{id}_R1.fastq", "data/raw/{id}_R2.fastq"],
+        reads=["data/raw/{id}_R1.fastq.gz", "data/raw/{id}_R2.fastq.gz"],
+        idx=lambda wildcards: ref_path_list(wildcards.refname)
         # Index can be a list of (all) files created by bwa, or one of them
-        idx=multiext(lambda wildcards: hg_path_dict[wildcards.refname], ".amb", ".ann", ".bwt.2bit.64", ".pac"),
+        # idx=multiext(lambda wildcards: str(hg_path_dict[wildcards.refname]), ".amb", ".ann", ".bwt.2bit.64", ".pac"),
     output:
         bam = 'data/aligned_{refname}/{id}_{refname}.bam',
     log:
@@ -115,7 +121,7 @@ rule mark_duplicates:
     # of marking duplicates on separate read groups for a sample
     # and then merging
     output:
-        bam="data/marked_{refname}/{id}_{refname}.bam",
+        bam="data/marked_{refname}/{id}_{refname}_mrk.bam",
         metrics="marked_{refname}/{id}_{refname}.metrics.txt",
     log:
         "logs/picard/marked/{id}_{refname}.log",
@@ -143,14 +149,17 @@ rule fastqc:
     wrapper:
         "v1.23.4/bio/fastqc"
 
+##TODO: implement glob wildscards id
+##TODO: generate function to go from step folder to extentension
+##TODO: combine both to generate input files
 rule multiqc:
     input:
         infiles = lambda wildcards: generate_qc_outputs(wildcards.step_folder, wildcards.refname)
     output:
-        multiqc_report = "qc_outputs/{step_folder}_{refname}/multiqc_output/multiqc_report.html"
+        multiqc_report = "qc_outputs/{step_folder}/multiqc_output/multiqc_report.html"
     conda:
         config['wgs_env']
     shell:
         """
-        multiqc --outdir qc_outputs/{wildcards.step_folder}_{wildcards.refname}/multiqc_output qc_outputs/{wildcards.step_folder}_{wildcards.refname}
+        multiqc --outdir qc_outputs/{wildcards.step_folder}/multiqc_output qc_outputs/{wildcards.step_folder}
         """ 
