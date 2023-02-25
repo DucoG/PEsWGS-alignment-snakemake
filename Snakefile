@@ -126,12 +126,12 @@ rule fastqc:
         fastqc_report = 'qc_outputs/{step_folder}_{refname}/fastqc_output/{id}_fastqc.html'
     conda:
         config['wgs_env']
-    threads: 2
+    threads: 4
     resources:
-        mem_mb=1024
+        mem_mb=2024
     shell:
         """
-        fastqc -Xmx{resources.mem_mb}m -o qc_outputs/{wildcards.step_folder}_{wildcards.refname}/fastqc_output {input.file}
+        fastqc -t {threads} -o qc_outputs/{wildcards.step_folder}_{wildcards.refname}/fastqc_output {input.file}
         """
 
 rule multiqc:
