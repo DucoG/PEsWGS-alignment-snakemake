@@ -5,40 +5,12 @@ from datetime import datetime
 
 configfile: "config_snake.yaml"
 
-hg_path_dict = {
-    "hg19": "/home/d.gaillard/source/reference_genomes/hg19/hg19.fa",
-    "hg38noalt": "/home/d.gaillard/source/reference_genomes/hg38_no_alt/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna",
-    "hg38full": "/home/d.gaillard/source/reference_genomes/hg38_full/hg38.fa"
-}
+hg_path_dict = config['hg_path_dict']
 
 IDS, = glob_wildcards("data/raw/{id}.fastq.gz")
-IDS = ['_'.join(x.split('_')[:-1]) for x in IDS]
-print(IDS)
+IDS = list(set(['_'.join(x.split('_')[:-1]) for x in IDS]))
 
-def generate_qc_outputs(step, refname):
-    data_dir = Path("data")
-    raw_files = list(data_dir.joinpath("raw").glob("*.fastq.gz"))
-    qc_dir = Path("qc_outputs")
-
-    step_to_suffix = {
-        "raw": "_fastqc.html",
-        f"aligned_{refname}": f"_{refname}_fastqc.html",
-        f"marked_{refname}": f"_{refname}_mrk_fastqc.html",
-    }
-
-    output_qc_paths = []
-    if step in ['raw', 'aligned', 'marked']:
-        qc_suffix = step_to_suffix[f"{step}_{refname}"]
-        if step in ["aligned", "marked"]:
-            raw_files = [f for f in raw_files if "R1" in str(f)]
-        for file in raw_files:
-            new_file_name = f"{Path(file.stem).stem}{qc_suffix}".replace("_R1", "")
-            new_file_path = qc_dir.joinpath(f"{step}_{refname}", "fastqc_output" , new_file_name)
-            output_qc_paths.append(str(new_file_path))
-    else:
-        raise ValueError(f"Unknown step {step}")
-
-    return output_qc_paths
+fastq_files, = glob_wildcards("data/raw/{fastq_file}.fastq.gz")
 
 def get_ext(step_folder):
     ext_map = {
@@ -47,17 +19,6 @@ def get_ext(step_folder):
         'marked': '.bam'
     }
     return ext_map.get(step_folder)
-
-def get_index_ext(step_folder):
-    ext_map = {
-        'raw': '.fastq.gz',
-        'aligned': '.bam.bai',
-        'marked': '.bam.bai'
-    }
-    return ext_map.get(step_folder)
-
-def get_timestamp_string():
-	return datetime.fromtimestamp(datetime.timestamp(datetime.now())).strftime("%y-%m-%d-%H:%M")
 
 
 rule all:
@@ -81,13 +42,13 @@ rule bwa_mem2_index:
     wrapper:
         "v1.23.4/bio/bwa-mem2/index"
 
-ref_path_list = lambda refname: [hg_path_dict[refname], f"{hg_path_dict[refname]}.bwt.2bit.64"]
+ref_path_list = lambda refname: hg_path_dict[refname]
 rule bwa_mem2_mem:
     input:
         reads=["data/raw/{id}_R1.fastq.gz", "data/raw/{id}_R2.fastq.gz"],
-        idx=lambda wildcards: ref_path_list(wildcards.refname)
+        # idx=lambda wildcards: ref_path_list(wildcards.refname)
         # Index can be a list of (all) files created by bwa, or one of them
-        # idx=multiext(lambda wildcards: str(hg_path_dict[wildcards.refname]), ".amb", ".ann", ".bwt.2bit.64", ".pac"),
+        idx=multiext("/home/d.gaillard/source/PEsWGS-alignment-snakemake/ref_genome/hg19.fa", ".amb", ".ann", ".bwt.2bit.64", ".pac"),
     output:
         bam = 'data/aligned_{refname}/{id}_{refname}.bam',
     log:
@@ -122,7 +83,7 @@ rule mark_duplicates:
     # and then merging
     output:
         bam="data/marked_{refname}/{id}_{refname}_mrk.bam",
-        metrics="marked_{refname}/{id}_{refname}.metrics.txt",
+        metrics="qc_outputs/marked_{refname}/{id}_{refname}.metrics.txt",
     log:
         "logs/picard/marked/{id}_{refname}.log",
     params:
@@ -135,8 +96,20 @@ rule mark_duplicates:
         mem_mb=1024,
     wrapper:
         "v1.23.4/bio/picard/markduplicates"
+
+rule fastqc_raw:
+    input: "data/raw/{sample}.fastq.gz"
+    output:
+        html='qc_outputs/raw/fastqc_output/{sample}_fastqc.html',
+        zip='qc_outputs/raw/fastqc_output/{sample}_fastqc.zip' # the suffix _fastqc.zip is necessary for multiqc to find the file. If not using multiqc, you are free to choose an arbitrary filename
+    params: "--quiet"
+    log:
+        "logs/fastqc_raw/{sample}.log"
+    threads: 1
+    wrapper:
+        "v1.23.4/bio/fastqc"
         
-rule fastqc:
+rule fastqc_marked:
     input:
         lambda wildcards: f'data/{wildcards.step_folder}_{wildcards.refname}/{wildcards.id}' + get_ext(wildcards.step_folder)
     output:
@@ -149,17 +122,63 @@ rule fastqc:
     wrapper:
         "v1.23.4/bio/fastqc"
 
-##TODO: implement glob wildscards id
-##TODO: generate function to go from step folder to extentension
-##TODO: combine both to generate input files
-rule multiqc:
+def generate_neccesary_fastqcs_raw(fastq_files):
+    base_path = Path('qc_outputs').joinpath("raw").joinpath('fastqc_output')
+    filenames = [fastq_file + "_fastqc.zip" for fastq_file in fastq_files]
+    full_paths = [ str(base_path.joinpath(filename)) for filename in filenames]
+    return full_paths
+
+# rule multiqc_raw:
+#     input:
+#         infiles = generate_neccesary_fastqcs_raw(fastq_files)
+#     output:
+#         multiqc_report = "qc_outputs/raw/multiqc_output/multiqc_report.html"
+#     conda:
+#         config['wgs_env']
+#     shell:
+#         """
+#         multiqc --outdir qc_outputs/raw/multiqc_output qc_outputs/raw
+#         """ 
+
+rule multiqc_dir_raw:
     input:
-        infiles = lambda wildcards: generate_qc_outputs(wildcards.step_folder, wildcards.refname)
+        generate_neccesary_fastqcs_raw(fastq_files)
     output:
-        multiqc_report = "qc_outputs/{step_folder}/multiqc_output/multiqc_report.html"
-    conda:
-        config['wgs_env']
-    shell:
-        """
-        multiqc --outdir qc_outputs/{wildcards.step_folder}/multiqc_output qc_outputs/{wildcards.step_folder}
-        """ 
+        "qc_outputs/raw/multiqc_output/multiqc_report.html"
+    params:
+        extra=""  # Optional: extra parameters for multiqc.
+    log:
+        "logs/multiqc_raw.log"
+    wrapper:
+        "v1.23.4/bio/multiqc"
+
+
+def generate_neccesary_fastqcs_marked(IDS, refname):
+    base_path = Path('qc_outputs').joinpath(f"marked_{refname}").joinpath('fastqc_output')
+    filenames = [ID + f"_{refname}_mrk_fastqc.zip" for ID in IDS]
+    full_paths = [ str(base_path.joinpath(filename)) for filename in filenames]
+    return full_paths
+
+# rule multiqc_marked:
+#     input:
+#         infiles = lambda wildcards: generate_neccesary_fastqcs_marked(IDS, wildcards.refname)
+#     output:
+#         multiqc_report = "qc_outputs/marked_{refname}/multiqc_output/multiqc_report.html"
+#     conda:
+#         config['wgs_env']
+#     shell:
+#         """
+#         multiqc --outdir qc_outputs/marked_{wildcards.refname}/multiqc_output qc_outputs/marked_{wildcards.refname}
+#         """ 
+
+rule multiqc_dir_marked:
+    input:
+        lambda wildcards: generate_neccesary_fastqcs_marked(IDS, wildcards.refname)
+    output:
+        "qc_outputs/marked_{refname}/multiqc_output/multiqc_report.html"
+    params:
+        extra=""  # Optional: extra parameters for multiqc.
+    log:
+        "logs/multiqc_{refname}.log"
+    wrapper:
+        "v1.23.4/bio/multiqc"
