@@ -13,14 +13,8 @@ hg_path_dict = config['hg_path_dict']
 def refname_2_bwamem2index(refname):
     return multiext(hg_path_dict[refname], ".amb", ".ann", ".bwt.2bit.64", ".pac")
 
-
-def get_ext(step_folder):
-    ext_map = {
-        'raw': '.fastq.gz',
-        'aligned': '.bam',
-        'marked': '.bam'
-    }
-    return ext_map.get(step_folder)
+def fastqc_input(wildcards):
+    return f"data/{wildcards.sample_type}/{wildcards.sample}.fastq.gz" if wildcards.sample_type == "raw" else f"data/marked_{wildcards.refname}/{wildcards.sample}.bam"
 
 
 rule all:
@@ -98,28 +92,18 @@ rule mark_duplicates:
     wrapper:
         "v1.23.4/bio/picard/markduplicates"
 
-rule fastqc_raw:
-    input: "data/raw/{sample}.fastq.gz"
-    output:
-        html='qc_outputs/raw/fastqc_output/{sample}_fastqc.html',
-        zip='qc_outputs/raw/fastqc_output/{sample}_fastqc.zip' # the suffix _fastqc.zip is necessary for multiqc to find the file. If not using multiqc, you are free to choose an arbitrary filename
-    params: "--quiet"
-    log:
-        "logs/fastqc_raw/{sample}.log"
-    threads: 1
-    wrapper:
-        "v1.23.4/bio/fastqc"
-        
-rule fastqc_marked:
+rule fastqc:
     input:
-        lambda wildcards: f'data/{wildcards.step_folder}_{wildcards.refname}/{wildcards.id}' + get_ext(wildcards.step_folder)
+        lambda wildcards: fastqc_input(wildcards)
     output:
-        html='qc_outputs/{step_folder}_{refname}/fastqc_output/{id}_fastqc.html',
-        zip='qc_outputs/{step_folder}_{refname}/fastqc_output/{id}_fastqc.zip' # the suffix _fastqc.zip is necessary for multiqc to find the file. If not using multiqc, you are free to choose an arbitrary filename
+        html='qc_outputs/{sample_type}/fastqc_output/{sample}_fastqc.html',
+        zip='qc_outputs/{sample_type}/fastqc_output/{sample}_fastqc.zip'
     params: "--quiet"
     log:
-        "logs/fastqc_{step_folder}/{id}_{refname}.log"
+        "logs/fastqc_{sample_type}/{sample}.log"
     threads: 1
+    wildcard_constraints:
+        sample_type = "raw|marked"
     wrapper:
         "v1.23.4/bio/fastqc"
 
