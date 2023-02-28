@@ -59,7 +59,7 @@ def get_timestamp_string():
 rule all:
     input:
         # generate_output_files('data/raw'),
-        "qc_outputs/raw/multiqc_output/multiqc_report.html",
+        # "qc_outputs/raw/multiqc_output/multiqc_report.html",
         "qc_outputs/marked_hg19/multiqc_output/multiqc_report.html",
         # "qc_outputs/marked_hg38noalt/multiqc_output/multiqc_report.html"
 
