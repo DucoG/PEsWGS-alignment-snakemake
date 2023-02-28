@@ -1,16 +1,18 @@
-
 import os
 from pathlib import Path
 from datetime import datetime
 
 configfile: "config_snake.yaml"
 
-hg_path_dict = config['hg_path_dict']
-
 IDS, = glob_wildcards("data/raw/{id}.fastq.gz")
 IDS = list(set(['_'.join(x.split('_')[:-1]) for x in IDS]))
 
 fastq_files, = glob_wildcards("data/raw/{fastq_file}.fastq.gz")
+
+hg_path_dict = config['hg_path_dict']
+def refname_2_bwamem2index(refname):
+    return multiext(hg_path_dict[refname], ".amb", ".ann", ".bwt.2bit.64", ".pac")
+
 
 def get_ext(step_folder):
     ext_map = {
@@ -28,6 +30,7 @@ rule all:
         "qc_outputs/marked_hg19/multiqc_output/multiqc_report.html",
         # "qc_outputs/marked_hg38noalt/multiqc_output/multiqc_report.html"
 
+
 rule bwa_mem2_index:
     input:
         "{genome}",
@@ -42,13 +45,11 @@ rule bwa_mem2_index:
     wrapper:
         "v1.23.4/bio/bwa-mem2/index"
 
-ref_path_list = lambda refname: hg_path_dict[refname]
 rule bwa_mem2_mem:
     input:
         reads=["data/raw/{id}_R1.fastq.gz", "data/raw/{id}_R2.fastq.gz"],
-        # idx=lambda wildcards: ref_path_list(wildcards.refname)
         # Index can be a list of (all) files created by bwa, or one of them
-        idx=multiext("/home/d.gaillard/source/PEsWGS-alignment-snakemake/ref_genome/hg19.fa", ".amb", ".ann", ".bwt.2bit.64", ".pac"),
+        idx=lambda wildcards: refname_2_bwamem2index(wildcards.refname)
     output:
         bam = 'data/aligned_{refname}/{id}_{refname}.bam',
     log:
@@ -128,18 +129,6 @@ def generate_neccesary_fastqcs_raw(fastq_files):
     full_paths = [ str(base_path.joinpath(filename)) for filename in filenames]
     return full_paths
 
-# rule multiqc_raw:
-#     input:
-#         infiles = generate_neccesary_fastqcs_raw(fastq_files)
-#     output:
-#         multiqc_report = "qc_outputs/raw/multiqc_output/multiqc_report.html"
-#     conda:
-#         config['wgs_env']
-#     shell:
-#         """
-#         multiqc --outdir qc_outputs/raw/multiqc_output qc_outputs/raw
-#         """ 
-
 rule multiqc_dir_raw:
     input:
         generate_neccesary_fastqcs_raw(fastq_files)
@@ -158,18 +147,6 @@ def generate_neccesary_fastqcs_marked(IDS, refname):
     filenames = [ID + f"_{refname}_mrk_fastqc.zip" for ID in IDS]
     full_paths = [ str(base_path.joinpath(filename)) for filename in filenames]
     return full_paths
-
-# rule multiqc_marked:
-#     input:
-#         infiles = lambda wildcards: generate_neccesary_fastqcs_marked(IDS, wildcards.refname)
-#     output:
-#         multiqc_report = "qc_outputs/marked_{refname}/multiqc_output/multiqc_report.html"
-#     conda:
-#         config['wgs_env']
-#     shell:
-#         """
-#         multiqc --outdir qc_outputs/marked_{wildcards.refname}/multiqc_output qc_outputs/marked_{wildcards.refname}
-#         """ 
 
 rule multiqc_dir_marked:
     input:
