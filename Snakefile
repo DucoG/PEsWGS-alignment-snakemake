@@ -2,57 +2,8 @@ from pathlib import Path
 
 configfile: "config_snake.yaml"
 
-<<<<<<< HEAD
-hg_path_dict = {
-    "hg19": "/home/d.gaillard/source/reference_genomes/hg19/hg19.fa",
-    "hg38noalt": "/home/d.gaillard/source/reference_genomes/hg38_no_alt/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna",
-    "hg38full": "/home/d.gaillard/source/reference_genomes/hg38_full/hg38.fa"
-}
-
-def generate_qc_outputs(step, refname):
-    data_dir = Path("data")
-    raw_files = list(data_dir.joinpath("raw").glob("*.fastq.gz"))
-    qc_dir = Path("qc_outputs")
-
-    step_to_suffix = {
-        "raw": "_fastqc.html",
-        f"aligned_{refname}": f"_{refname}_fastqc.html",
-        f"marked_{refname}": f"_{refname}_mrk_fastqc.html",
-    }
-
-    output_qc_paths = []
-    if step in ['raw', 'aligned', 'marked']:
-        qc_suffix = step_to_suffix[f"{step}_{refname}"]
-        if step in ["aligned", "marked"]:
-            raw_files = [f for f in raw_files if "R1" in str(f)]
-        for file in raw_files:
-            new_file_name = f"{Path(file.stem).stem}{qc_suffix}".replace("_R1", "")
-            new_file_path = qc_dir.joinpath(f"{step}_{refname}", "fastqc_output" , new_file_name)
-            output_qc_paths.append(str(new_file_path))
-    else:
-        raise ValueError(f"Unknown step {step}")
-
-    return output_qc_paths
-
-def get_ext(step_folder):
-    ext_map = {
-        'raw': '.fastq.gz',
-        'aligned': '.bam',
-        'marked': '.bam'
-    }
-    return ext_map.get(step_folder)
-
-def get_index_ext(step_folder):
-    ext_map = {
-        'raw': '.fastq.gz',
-        'aligned': '.bam.bai',
-        'marked': '.bam.bai'
-    }
-    return ext_map.get(step_folder)
-=======
 IDS, = glob_wildcards("data/raw/{id}.fastq.gz")
 IDS = list(set(['_'.join(x.split('_')[:-1]) for x in IDS]))
->>>>>>> origin/wrapper_version
 
 # fastq_files, = glob_wildcards("data/raw/{fastq_file}.fastq.gz")
 
@@ -63,15 +14,9 @@ def refname_2_bwamem2index(refname):
 rule all:
     input:
         # generate_output_files('data/raw'),
-<<<<<<< HEAD
-        # "qc_outputs/raw/multiqc_output/multiqc_report.html",
-        "qc_outputs/marked_hg19/multiqc_output/multiqc_report.html",
-        # "qc_outputs/marked_hg38noalt/multiqc_output/multiqc_report.html"
-=======
         "qc_outputs/raw/multiqc_output/multiqc_report.html",
         # "qc_outputs/marked_hg19/multiqc_output/multiqc_report.html",
         "qc_outputs/marked_hg38noalt/multiqc_output/multiqc_report.html"
->>>>>>> origin/wrapper_version
 
 
 rule bwa_mem2_index:
