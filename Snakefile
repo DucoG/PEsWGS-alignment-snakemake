@@ -1,6 +1,5 @@
 import os
 from pathlib import Path
-from datetime import datetime
 
 configfile: "config_snake.yaml"
 
@@ -14,15 +13,15 @@ def refname_2_bwamem2index(refname):
     return multiext(hg_path_dict[refname], ".amb", ".ann", ".bwt.2bit.64", ".pac")
 
 def fastqc_input(wildcards):
-    return f"data/{wildcards.sample_type}/{wildcards.sample}.fastq.gz" if wildcards.sample_type == "raw" else f"data/marked_{wildcards.refname}/{wildcards.sample}.bam"
+    return f"data/{wildcards.sample_type}/{wildcards.sample}.fastq.gz" if wildcards.sample_type == "raw" else f"data/{wildcards.sample_type}/{wildcards.sample}.bam"
 
 
 rule all:
     input:
         # generate_output_files('data/raw'),
         "qc_outputs/raw/multiqc_output/multiqc_report.html",
-        "qc_outputs/marked_hg19/multiqc_output/multiqc_report.html",
-        # "qc_outputs/marked_hg38noalt/multiqc_output/multiqc_report.html"
+        # "qc_outputs/marked_hg19/multiqc_output/multiqc_report.html",
+        "qc_outputs/marked_hg38noalt/multiqc_output/multiqc_report.html"
 
 
 rule bwa_mem2_index:
@@ -102,8 +101,6 @@ rule fastqc:
     log:
         "logs/fastqc_{sample_type}/{sample}.log"
     threads: 1
-    wildcard_constraints:
-        sample_type = "raw|marked"
     wrapper:
         "v1.23.4/bio/fastqc"
 
