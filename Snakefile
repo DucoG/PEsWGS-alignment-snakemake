@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 configfile: "config_snake.yaml"
@@ -6,15 +5,11 @@ configfile: "config_snake.yaml"
 IDS, = glob_wildcards("data/raw/{id}.fastq.gz")
 IDS = list(set(['_'.join(x.split('_')[:-1]) for x in IDS]))
 
-fastq_files, = glob_wildcards("data/raw/{fastq_file}.fastq.gz")
+# fastq_files, = glob_wildcards("data/raw/{fastq_file}.fastq.gz")
 
 hg_path_dict = config['hg_path_dict']
 def refname_2_bwamem2index(refname):
     return multiext(hg_path_dict[refname], ".amb", ".ann", ".bwt.2bit.64", ".pac")
-
-def fastqc_input(wildcards):
-    return f"data/{wildcards.sample_type}/{wildcards.sample}.fastq.gz" if wildcards.sample_type == "raw" else f"data/{wildcards.sample_type}/{wildcards.sample}.bam"
-
 
 rule all:
     input:
@@ -91,6 +86,9 @@ rule mark_duplicates:
     wrapper:
         "v1.23.4/bio/picard/markduplicates"
 
+def fastqc_input(wildcards):
+    return f"data/{wildcards.sample_type}/{wildcards.sample}.fastq.gz" if wildcards.sample_type == "raw" else f"data/{wildcards.sample_type}/{wildcards.sample}.bam"
+
 rule fastqc:
     input:
         lambda wildcards: fastqc_input(wildcards)
@@ -104,39 +102,24 @@ rule fastqc:
     wrapper:
         "v1.23.4/bio/fastqc"
 
-def generate_neccesary_fastqcs_raw(fastq_files):
-    base_path = Path('qc_outputs').joinpath("raw").joinpath('fastqc_output')
-    filenames = [fastq_file + "_fastqc.zip" for fastq_file in fastq_files]
-    full_paths = [ str(base_path.joinpath(filename)) for filename in filenames]
+def generate_neccesary_fastqcs(sample_type):
+    base_path = Path('qc_outputs').joinpath(sample_type).joinpath('fastqc_output')
+    if sample_type == "raw":
+        filenames = [ID + "_fastqc.zip" for ID in IDS]
+    else:
+        refname = sample_type.split('_')[-1]
+        filenames = [ID + f"_{refname}_mrk_fastqc.zip" for ID in IDS]
+    full_paths = [str(base_path.joinpath(filename)) for filename in filenames]
     return full_paths
 
-rule multiqc_dir_raw:
+rule multiqc_dir:
     input:
-        generate_neccesary_fastqcs_raw(fastq_files)
+        lambda wildcards: generate_neccesary_fastqcs(wildcards.sample_type)
     output:
-        "qc_outputs/raw/multiqc_output/multiqc_report.html"
+        "qc_outputs/{sample_type}/multiqc_output/multiqc_report.html"
     params:
         extra=""  # Optional: extra parameters for multiqc.
     log:
-        "logs/multiqc_raw.log"
-    wrapper:
-        "v1.23.4/bio/multiqc"
-
-
-def generate_neccesary_fastqcs_marked(IDS, refname):
-    base_path = Path('qc_outputs').joinpath(f"marked_{refname}").joinpath('fastqc_output')
-    filenames = [ID + f"_{refname}_mrk_fastqc.zip" for ID in IDS]
-    full_paths = [ str(base_path.joinpath(filename)) for filename in filenames]
-    return full_paths
-
-rule multiqc_dir_marked:
-    input:
-        lambda wildcards: generate_neccesary_fastqcs_marked(IDS, wildcards.refname)
-    output:
-        "qc_outputs/marked_{refname}/multiqc_output/multiqc_report.html"
-    params:
-        extra=""  # Optional: extra parameters for multiqc.
-    log:
-        "logs/multiqc_{refname}.log"
+        "logs/multiqc_{sample_type}.log"
     wrapper:
         "v1.23.4/bio/multiqc"
