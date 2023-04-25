@@ -18,18 +18,9 @@ git clone https://github.com/DucoG/PEsWGS-alignment-snakemake.git
 cd PEsWGS-alignment-snakemake
 ```
 
-### Conda Environment
-
-The pipeline requires a conda environment which can be installed using the `env.yml` file in the repository. To install the environment, run the following command:
-```bash
-conda env create --file env.yml
-```
-
-This will create a conda environment named `wgs` which is required for the pipeline.
-
 ### Config File
 
-The `config_snake.yaml` file contains variables and settings required for the pipeline. Please update this file with your own values before running the pipeline.
+The `config_snake.yaml` contains the location of the reference genome required. Please update this file with your own values before running the pipeline.
 
 ## Usage
 Once the environment and config file have been set up, the pipeline can be run using snakemake. Before running the entire pipeline for all your samples, it is advisable to first check if all settings are correct using a dry run using the `-n` option for a dry-run and `-p` for printing the ran commands:

@@ -48,6 +48,7 @@ rule bwa_mem2_mem:
         sort_order="coordinate",  # Can be 'coordinate' (default) or 'queryname'.
         sort_extra="",  # Extra args for samtools/picard.
     threads: 8
+    priority: 50
     wrapper:
         "v1.23.4/bio/bwa-mem2/mem"
 
@@ -61,6 +62,7 @@ rule samtools_index:
     params:
         extra="",  # optional params string
     threads: 2  # This value - 1 will be sent to -@
+    priority: 40
     wrapper:
         "v1.23.4/bio/samtools/index"
 
@@ -83,8 +85,9 @@ rule mark_duplicates:
     # https://snakemake.readthedocs.io/en/latest/executing/cluster.html#job-properties
     resources:
         mem_mb=1024,
+    priority: 1
     wrapper:
-        "v1.23.4/bio/picard/markduplicates"
+        "v1.25.0/bio/picard/markduplicates"
 
 def fastqc_input(wildcards):
     return f"data/{wildcards.sample_type}/{wildcards.sample}.fastq.gz" if wildcards.sample_type == "raw" else f"data/{wildcards.sample_type}/{wildcards.sample}.bam"
@@ -99,6 +102,7 @@ rule fastqc:
     log:
         "logs/fastqc_{sample_type}/{sample}.log"
     threads: 1
+    priority: 0
     wrapper:
         "v1.23.4/bio/fastqc"
 
